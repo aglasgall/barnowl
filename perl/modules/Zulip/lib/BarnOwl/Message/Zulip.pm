@@ -91,7 +91,7 @@ sub replyprivate {
     my @filtered_recipients = grep { $_ ne BarnOwl::Module::Zulip::user() } @recipients;
     if (scalar(@filtered_recipients) == 0) {
         # Self must have been only recipient, so re-add it (one copy)
-        @filtered_recipients = @recipients[0];
+        @filtered_recipients = $recipients[0];
     }
     return BarnOwl::quote("zulip:write", @filtered_recipients);
 }
@@ -99,14 +99,9 @@ sub replyprivate {
 # Strip layers of "un" and ".d" from names
 sub base_name {
     my $name = shift;
+    my ($base) = $name =~ /^(?:un)*(.*?)(?:\.d)*$/;
 
-    while($name =~ /(^un)/) {
-	$name =~ s/(^un)//;
-    }
-    while($name =~ /\.d$/) {
-	$name =~ s/(\.d$)//g;
-    }
-    return $name;
+    return $base;
 }
 
 sub baseclass {
@@ -145,8 +140,8 @@ sub smartfilter {
 	    }
 	    $filter = "zulip-user-$person";
 	    #	    $person =~ s/\./\\./
-	    $person =~ quote_for_filter($person);
-	    @filter = split / /, "( type ^Zulip\$ and filter personal and ( ( direction ^in\$ and sender ^${person}\$ ) or ( direction ^out\$ and recipient ^${person}\$ ) ) )";
+	    $person = quote_for_filter($person);
+	    @filter = (qw{( type ^Zulip$ and filter personal and ( ( direction ^in$ and sender}, "^$person\$", qw{) or ( direction ^out$ and recipient}, "^$person\$", qw{) ) )});
 	}
     } else {
 	my $class;

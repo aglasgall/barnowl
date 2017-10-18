@@ -33,9 +33,11 @@ The Facebook module requires:
 
 Any::Moose
 AnyEvent::HTTP
+AnyEvent::TLS
 DateTime
 DateTime::Format::Strptime
 JSON
+MIME::Base64
 MIME::Base64::URLSafe
 Ouch
 URI

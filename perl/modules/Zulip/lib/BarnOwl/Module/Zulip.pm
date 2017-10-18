@@ -38,22 +38,23 @@ sub fail {
 
 sub initialize {
     my $conffile = BarnOwl::get_config_dir() . "/zulip";
-
+    my @tls_params = (sslv3 => 0, verify_peername => "http");
     if (open(my $fh, "<", "$conffile")) {
         read_config($fh);
         close($fh);
     }
-    if ($cfg{'api_url'} =~ /^https/) {
-        if (exists $cfg{'ssl_key_file'}) {
-            $tls_ctx = new AnyEvent::TLS(verify => $cfg{'ssl_verify'}, 
-                                         sslv3 => 0, verify_peername => "http",
-                                         ca_file => $cfg{'ssl_ca_file'},
-                                         cert_file => $cfg{'ssl_cert_file'},
-                                         key_file => $cfg{'ssl_key_file'});
+    if ((exists $cfg{'api_url'}) and ($cfg{'api_url'} =~ /^https/)) {
+        if ((exists $cfg{'ssl_verify'}) and ($cfg{'ssl_verify'} == 0)) {
+            push @tls_params, (verify => 0);
         } else {
-            $tls_ctx = new AnyEvent::TLS(verify => $cfg{'ssl_verify'}, 
-                                         sslv3 => 0, verify_peername => "http",
-                                         ca_file => $cfg{'ssl_ca_file'});
+            push @tls_params, (verify => 1);
+            if (exists $cfg{'ssl_key_file'}) {
+                push @tls_params, (cert_file => $cfg{'ssl_cert_file'}, key_file => $cfg{'ssl_key_file'});
+            }
+            if (exists $cfg{'ssl_ca_file'}) {
+                push @tls_params, (ca_file => $cfg{'ssl_ca_file'});
+            }
+            $tls_ctx = new AnyEvent::TLS(@tls_params);
         }           
     } else {
         # we still want it for a unique id
@@ -96,27 +97,21 @@ sub read_config {
     }
     my $default_realm = $raw_cfg->{default_realm};
 
+    $cfg{'ssl_verify'} = 1;
     if( exists $raw_cfg->{ssl}) {
-        # mandatory parameters
-        if (! exists $raw_cfg->{ssl}->{ca_file}) {
-            fail("SSL parameters specified, but no CA file set");
+        if (exists $raw_cfg->{ssl}->{ssl_ca_file}) {
+            $cfg{'ssl_ca_file'} = $raw_cfg->{ssl}->{ca_file};
         }
-        $cfg{'ssl_ca_file'} = $raw_cfg->{ssl}->{ca_file};
-        $cfg{'ssl_verify'} = 1;
-        # optional parameters
+        if ((exists $raw_cfg->{ssl}->{verify}) and ($raw_cfg->{ssl}->{verify}) == 0) {
+            $cfg{'ssl_verify'} = 0;
+            BarnOwl::admin_message('Zulip Warning', 'Zulip: Server certificate configuration DISABLED as per explicit request');
+        }
         if ( (exists $raw_cfg->{ssl}->{cert_file}) && exists $raw_cfg->{ssl}->{key_file}) {
             $cfg{'ssl_cert_file'} = $raw_cfg->{ssl}->{cert_file};
             $cfg{'ssl_key_file'} = $raw_cfg->{ssl}->{key_file};
-        }  else {
-            warn "SSL parameters specified, but no client credentials set.";
         }
-    } else {
-	$cfg{'ssl_verify'} = 0;
-	my $msg = "SSL parameters not specified. WILL NOT VERIFY SERVER CERTIFICATE. See README for details.";
-	BarnOwl::admin_message('Zulip Warning', "Zulip: $msg");
-	warn $msg;
     }
-    
+
     $cfg{'user'} = $user;
     $cfg{'apikey'} = $apikey;
     $cfg{'api_url'} = $api_url;
@@ -479,7 +474,7 @@ BarnOwl::new_command('zulip:login' => sub { cmd_zulip_login(@_); },
 BarnOwl::new_command('zulip:write' => sub { cmd_zulip_write(@_); },
                      {
                          summary => "Send a zulipgram",
-                         usage => "zulip:login [-c stream] [-i subject] [recipient(s)]",
+                         usage => "zulip:write [-c stream] [-i subject] [recipient(s)]",
                          description => "Send a zulipgram to a stream, person, or set of people"
                      });
 
